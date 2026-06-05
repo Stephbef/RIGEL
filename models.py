@@ -4,7 +4,7 @@ RIGEL: Neural Network Architectures with Exact Lipschitz Machinery
 
 This module implements all neural network components for the RIGEL framework.
 Every component has an exactly computable Lipschitz constant, which is the
-prerequisite for the uncertainty decomposition (the actual TKDE contribution).
+prerequisite for the uncertainty decomposition .
 
 IMPORTANT — CONTRIBUTION CLARITY:
     The Cayley parameterization, GroupSort activation, and Lipschitz-constrained
