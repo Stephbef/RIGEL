@@ -1,0 +1,50 @@
+# ===========================================================================
+# RIGEL: Reliability-Informed Graph Engine for Trustworthy Learning
+# ===========================================================================
+# Python >= 3.9 required (tested on 3.10.12)
+#
+# Install: pip install -r requirements.txt
+#
+# GPU support: install PyTorch with CUDA first, then install remaining deps.
+#   conda install pytorch==2.1.2 torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia
+#   pip install -r requirements.txt
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# Core dependencies (required for all modes)
+# ---------------------------------------------------------------------------
+torch>=2.0.0                  # GNN backbone, Cayley parameterization, GroupSort
+numpy>=1.24.0,<2.0.0          # Array operations, Weyl bound computation
+pyyaml>=6.0                   # config.yaml parsing
+
+# ---------------------------------------------------------------------------
+# Experiment and evaluation dependencies
+# ---------------------------------------------------------------------------
+scipy>=1.10.0                 # Paired t-tests (statistical significance),
+                              # Spearman correlation (heterogeneity analysis),
+                              # sparse matrix operations
+matplotlib>=3.7.0             # Figure generation (300 DPI, IEEE-compatible)
+                              # Required for: stacked_uncertainty.pdf,
+                              #               pareto.pdf, architecture.pdf
+
+# ---------------------------------------------------------------------------
+# Optional but recommended
+# ---------------------------------------------------------------------------
+tqdm>=4.65.0                  # Training progress bars
+tensorboard>=2.12.0           # Training monitoring and loss visualization
+scikit-learn>=1.2.0           # AUC-ROC, precision-recall, calibration metrics
+pandas>=2.0.0                 # Results aggregation and CSV export
+
+# ---------------------------------------------------------------------------
+# Graph processing (required for full dataset experiments)
+# ---------------------------------------------------------------------------
+torch-geometric>=2.4.0        # Graph data structures, neighbor sampling,
+                              # temporal data loaders
+torch-scatter>=2.1.2          # Efficient scatter operations for aggregation
+torch-sparse>=0.6.18          # Sparse matrix multiplication
+
+# ---------------------------------------------------------------------------
+# Reproducibility and development
+# ---------------------------------------------------------------------------
+jsonschema>=4.17.0            # Config validation
+psutil>=5.9.0                 # Memory monitoring during scalability analysis

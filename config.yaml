@@ -1,0 +1,1131 @@
+# ============================================================================
+# RIGEL: Reliability-Informed Graph Engine for Trustworthy Learning
+# ============================================================================
+# Configuration File for IEEE TKDE Submission
+#
+# Paper: "RIGEL: Decomposing Prediction Uncertainty for Trustworthy
+#         Graph Learning on Streaming Graphs"
+# Target: IEEE Transactions on Knowledge and Data Engineering (TKDE)
+# Type: Regular Paper (14 double-column pages)
+#
+# IMPORTANT — VENUE SCOPE ALIGNMENT:
+#   This is a KNOWLEDGE AND DATA ENGINEERING contribution about quantifying
+#   prediction reliability under realistic data uncertainty conditions.
+#   It is NOT a security paper, NOT an adversarial robustness paper, and
+#   NOT primarily about computational efficiency.
+#
+#   TKDE scope items addressed:
+#     (e) Real-time knowledge bases and databases — streaming reliability
+#     (g) Data management methodologies — uncertainty-aware prediction
+#     (j) Integrity, security, and fault tolerance — prediction reliability
+#     (n) Algorithms for these systems — Lipschitz-based decomposition
+#     (o) Performance evaluation — scalability to 203M edges
+#
+# CONTRIBUTION CLARITY:
+#   The Cayley parameterization and GroupSort activation are ARCHITECTURAL
+#   TOOLS (prior work) that enable exact Lipschitz computation. They are
+#   NOT claimed as contributions of this paper.
+#
+#   The CONTRIBUTIONS are:
+#     Theorem A: Uncertainty decomposition into structural + temporal +
+#                feature + interaction components
+#     Theorem B: Per-node structural uncertainty via Weyl's inequality
+#     Theorem C: Temporal staleness amplification model
+#     Theorem D: Uncertainty interaction (non-additive coupling)
+#     Theorem E: Reliability score R(v) ∈ [0,1] for actionable decisions
+#
+# SINGLE SOURCE OF TRUTH:
+#   Every mathematical constant, hyperparameter, and experimental setting
+#   is defined EXACTLY ONCE in this file. All code files import from here.
+#   No magic numbers exist anywhere in the codebase.
+# ============================================================================
+
+
+# ============================================================================
+# SECTION 1: PROJECT METADATA
+# ============================================================================
+project:
+  name: "RIGEL"
+  full_name: "Reliability-Informed Graph Engine for Trustworthy Learning"
+  version: "1.0.0"
+  description: >
+    A framework for decomposing and quantifying prediction uncertainty
+    on streaming graphs, enabling trustworthy decision-making under
+    structural incompleteness, temporal staleness, and feature noise.
+  authors:
+    - name: "Anonymous"
+      affiliation: "Anonymous Institution"
+  target_venue: "IEEE Transactions on Knowledge and Data Engineering"
+  paper_type: "Regular Paper"
+  max_pages: 14  # double-column, including references and biographies
+
+  # Theoretical contributions (the NOVEL part)
+  contributions:
+    - id: "theorem_a"
+      name: "Uncertainty Decomposition"
+      scope: "ALL uncertainty sources"
+      statement: >
+        U_total(v) = U_structural(v) + U_temporal(v) + U_feature(v)
+        + U_interaction(v), where each term is independently computable
+        and the decomposition is provably tight.
+
+    - id: "theorem_b"
+      name: "Structural Uncertainty via Weyl's Inequality"
+      scope: "STRUCTURAL uncertainty ONLY (missing edges)"
+      statement: >
+        U_structural(v) = ||x_v||_2 * Psi(rho, d_v, d_neighbors) * K / (alpha+1)
+        where Psi is a monotonically increasing function of the missing-edge
+        fraction rho, computed via per-edge Weyl bounds on Delta_A_hat.
+      mathematical_note: >
+        This derivation uses Weyl's inequality on the ADJACENCY perturbation
+        Delta_A_hat = A_hat_full - A_hat_observed. It does NOT use the
+        feature-Lipschitz constant L to bound structural changes. The
+        perturbation path is: missing edges -> Delta_A -> Delta_D ->
+        Delta_A_hat -> Delta_h -> Delta_output.
+
+    - id: "theorem_c"
+      name: "Temporal Staleness Amplification"
+      scope: "TEMPORAL uncertainty ONLY (data aging)"
+      statement: >
+        U_temporal(v, t) = Gamma(t - t0, lambda_v) * U_base(v)
+        where Gamma is a staleness amplification function and lambda_v
+        is the local event rate in v's neighborhood.
+      mathematical_note: >
+        This models NATURAL data aging, NOT adversarial timestamp
+        manipulation. The derivation is independent of the structural
+        uncertainty derivation — they use different mathematical tools.
+
+    - id: "theorem_d"
+      name: "Uncertainty Interaction"
+      scope: "INTERACTION between uncertainty sources"
+      statement: >
+        U_interaction(v) >= 0, with equality iff uncertainty sources are
+        statistically independent. Computable upper bound via correlation
+        between missing-edge patterns and staleness patterns.
+
+    - id: "theorem_e"
+      name: "Reliability Score"
+      scope: "ACTIONABLE reliability metric combining all sources"
+      statement: >
+        R(v) = margin(v) / (margin(v) + sqrt(2) * U_total(v))
+        R(v) in [0,1], monotonically increasing in margin, monotonically
+        decreasing in total uncertainty.
+
+
+# ============================================================================
+# SECTION 2: HARDWARE CONFIGURATION
+# ============================================================================
+# Server: 4x RTX 3090, 64-core Xeon Silver 4314, 384GB DDR4, CentOS 7
+# ============================================================================
+hardware:
+  gpu:
+    num_gpus: 4
+    gpu_ids: [0, 1, 2, 3]
+    gpu_type: "NVIDIA GeForce RTX 3090"
+    memory_per_gpu_gb: 24
+    total_gpu_memory_gb: 96
+    memory_fraction: 0.95
+    allow_growth: true
+
+    distributed:
+      enabled: true
+      backend: "nccl"
+      strategy: "ddp"
+      find_unused_parameters: false
+      gradient_as_bucket_view: true
+
+  cpu:
+    num_cores: 64
+    type: "Intel Xeon Silver 4314"
+    frequency_ghz: 2.40
+    num_workers_dataloader: 16  # 4 per GPU
+    num_threads_torch: 8
+    pin_memory: true
+
+  ram:
+    total_gb: 384
+    type: "DDR4"
+    # Memory budgets for streaming operation
+    streaming_buffer_gb: 64
+    feature_cache_gb: 128
+    reliability_cache_gb: 32
+    graph_structure_gb: 96
+    working_memory_gb: 64
+
+  storage:
+    checkpoint_dir: "./checkpoints"
+    results_dir: "./results"
+    logs_dir: "./logs"
+    data_dir: "./data"
+    artifacts_dir: "./paper_artifacts"
+
+
+# ============================================================================
+# SECTION 3: DATASET METADATA
+# ============================================================================
+# Complete metadata for reproducibility and reviewer satisfaction.
+#
+# DATA SOURCE: Ding et al. [35] — semi-supervised transductive setting.
+# Ethereum: phishing addresses and Ponzi schemes.
+# Bitcoin (Elliptic): ransomware and darknet marketplace transactions.
+# DeFi exploits and cross-chain attacks are NOT represented.
+#
+# These datasets exhibit all three uncertainty sources NATURALLY:
+#   - Structural incompleteness: privacy-preserving transactions hide edges,
+#     cross-chain activity is invisible, off-chain transactions unobserved.
+#   - Temporal staleness: Ethereum blocks ~12s, Bitcoin blocks ~600s,
+#     creating natural data aging between updates.
+#   - Feature noise: transaction amounts subject to rounding, gas prices
+#     fluctuate, address features are pseudonymous approximations.
+# ============================================================================
+datasets:
+  data_dir: "./data"
+
+  # --------------------------------------------------------------------------
+  # Ethereum-S (Eth-S): Phishing address detection — small scale
+  # --------------------------------------------------------------------------
+  ethereum_s:
+    name: "Eth-S"
+    path: "${data_dir}/ethereum_s.pt"
+    description: "Ethereum phishing/scam address detection (small scale)"
+
+    # Statistics (from Ding et al. [35], verified against Image 2)
+    num_nodes: 1329729       # 1.33M
+    num_edges: 6794521       # 6.79M
+    num_features: 2          # Node attributes
+    num_edge_features: 0     # Not used in transductive setting
+
+    # Labels
+    num_illicit: 1700
+    num_licit: 1700
+    imbalance_ratio: 1.02    # Nearly balanced (1:1.02)
+    num_classes: 2
+
+    # Temporal metadata
+    collection_period: "2020-2023"
+    blockchain: "Ethereum"
+    block_interval_seconds: 12  # Average Ethereum block time
+
+    # Fraud types
+    fraud_types_included:
+      - "phishing addresses"
+      - "Ponzi schemes"
+    fraud_types_NOT_included:
+      - "DeFi exploits"
+      - "cross-chain attacks"
+      - "flash loan attacks"
+      - "rug pulls"
+
+    # Data setting
+    setting: "semi-supervised transductive"
+    # Transductive: the full graph (including test nodes) is visible during
+    # training, but test node labels are hidden. This is standard for
+    # node classification on large graphs.
+
+    # Preprocessing
+    preprocessing:
+      normalize_features: true
+      normalization: "standard"  # zero mean, unit variance
+      handle_missing: "zero"     # missing features filled with 0
+
+    # Splits (temporal to prevent data leakage)
+    splits:
+      train_ratio: 0.70
+      val_ratio: 0.15
+      test_ratio: 0.15
+      split_method: "temporal"  # Earlier transactions for train, later for test
+
+  # --------------------------------------------------------------------------
+  # Ethereum-P (Eth-P): Phishing detection — larger scale
+  # --------------------------------------------------------------------------
+  ethereum_p:
+    name: "Eth-P"
+    path: "${data_dir}/ethereum_p.pt"
+    description: "Ethereum phishing detection (larger scale, imbalanced)"
+
+    num_nodes: 2973489       # 2.97M
+    num_edges: 13551303      # 13.55M
+    num_features: 2
+    num_edge_features: 0
+
+    num_illicit: 1200        # Fewer illicit (from Image 2: 1.2K)
+    num_licit: 3400          # More licit (from Image 2: 3.4K)
+    imbalance_ratio: 2.93    # Moderate imbalance (1:2.93)
+    num_classes: 2
+
+    collection_period: "2020-2023"
+    blockchain: "Ethereum"
+    block_interval_seconds: 12
+
+    fraud_types_included:
+      - "phishing addresses"
+      - "Ponzi schemes"
+    fraud_types_NOT_included:
+      - "DeFi exploits"
+      - "cross-chain attacks"
+      - "flash loan attacks"
+      - "rug pulls"
+
+    setting: "semi-supervised transductive"
+
+    preprocessing:
+      normalize_features: true
+      normalization: "standard"
+      handle_missing: "zero"
+
+    splits:
+      train_ratio: 0.70
+      val_ratio: 0.15
+      test_ratio: 0.15
+      split_method: "temporal"
+
+  # --------------------------------------------------------------------------
+  # Bitcoin-M (BTC-M): Ransomware/darknet detection — medium scale
+  # --------------------------------------------------------------------------
+  bitcoin_m:
+    name: "BTC-M"
+    path: "${data_dir}/bitcoin_m.pt"
+    description: "Bitcoin ransomware and darknet marketplace detection (Elliptic)"
+
+    num_nodes: 2505841       # 2.51M
+    num_edges: 14181316      # 14.18M
+    num_features: 8          # Richer feature set than Ethereum
+    num_edge_features: 0
+
+    num_illicit: 46900       # 46.9K
+    num_licit: 213000        # 213K
+    imbalance_ratio: 4.54    # Significant imbalance (1:4.54)
+    num_classes: 2
+
+    collection_period: "2012-2018"
+    blockchain: "Bitcoin"
+    block_interval_seconds: 600  # ~10 minutes per Bitcoin block
+
+    fraud_types_included:
+      - "ransomware payments"
+      - "darknet marketplace transactions"
+    fraud_types_NOT_included:
+      - "DeFi exploits (not applicable to Bitcoin in this period)"
+      - "cross-chain attacks"
+      - "mixing service transactions"
+
+    setting: "semi-supervised transductive"
+
+    preprocessing:
+      normalize_features: true
+      normalization: "standard"
+      handle_missing: "mean"  # Missing features filled with feature mean
+
+    splits:
+      train_ratio: 0.70
+      val_ratio: 0.15
+      test_ratio: 0.15
+      split_method: "temporal"
+
+  # --------------------------------------------------------------------------
+  # Bitcoin-L (BTC-L): Large-scale benchmark — scalability test
+  # --------------------------------------------------------------------------
+  bitcoin_l:
+    name: "BTC-L"
+    path: "${data_dir}/bitcoin_l.pt"
+    description: "Bitcoin large-scale ransomware/darknet detection (Elliptic)"
+
+    num_nodes: 20085231      # 20.1M
+    num_edges: 203419765     # 203.4M
+    num_features: 8
+    num_edge_features: 0
+
+    num_illicit: 362000      # 362K
+    num_licit: 1270000       # 1.27M
+    imbalance_ratio: 3.51    # Significant imbalance (1:3.51)
+    num_classes: 2
+
+    collection_period: "2012-2018"
+    blockchain: "Bitcoin"
+    block_interval_seconds: 600
+
+    fraud_types_included:
+      - "ransomware payments"
+      - "darknet marketplace transactions"
+    fraud_types_NOT_included:
+      - "DeFi exploits"
+      - "cross-chain attacks"
+      - "mixing service transactions"
+
+    setting: "semi-supervised transductive"
+
+    preprocessing:
+      normalize_features: true
+      normalization: "standard"
+      handle_missing: "mean"
+      lazy_loading: true       # Memory-efficient for 20M+ nodes
+      chunk_size: 1000000      # Load in 1M-node chunks
+
+    splits:
+      train_ratio: 0.70
+      val_ratio: 0.15
+      test_ratio: 0.15
+      split_method: "temporal"
+
+    streaming:
+      timestamp_column: "timestamp"
+      sort_by_timestamp: true
+
+
+# ============================================================================
+# SECTION 4: MODEL ARCHITECTURE
+# ============================================================================
+# Every mathematical constant is defined ONCE with a complete derivation.
+# All code files import these values — no magic numbers anywhere.
+#
+# ARCHITECTURAL FOUNDATION (prior work, NOT our contribution):
+#   - Cayley parameterization: W = (I-A)(I+A)^{-1} for exact orthogonality
+#     Guarantees ||W||_2 = 1 exactly. From Trockman & Kolter, ICLR 2021.
+#   - GroupSort activation: sorts neurons in groups of 2.
+#     Guarantees L_sigma = 1 exactly. From Anil et al., ICML 2019.
+#   - These are TOOLS enabling exact Lipschitz computation, which is
+#     the prerequisite for our uncertainty decomposition (the contribution).
+#
+# LIPSCHITZ BOUND DERIVATION (from first principles):
+#   Step 1: Symmetric normalized adjacency: ||A_hat||_2 <= 1
+#           (eigenvalues of D^{-1/2}AD^{-1/2} lie in [-1,1])
+#   Step 2: With self-loop weight alpha: ||alpha*I + A_hat||_2 <= alpha + 1
+#           (triangle inequality for spectral norms)
+#   Step 3: With Cayley weight W (||W||_2 = 1): L_layer = (alpha+1) * 1
+#   Step 4: With GroupSort sigma (L_sigma = 1): L_layer = (alpha+1) * 1 * 1
+#   Step 5: For K layers: L_total = (alpha+1)^K
+#   Default (alpha=1.0, K=3): L_total = 2^3 = 8.0
+#
+# MARGIN LIPSCHITZ DERIVATION (tight bound via Cauchy-Schwarz):
+#   The margin function g(x) = f_y(x) - f_{y'}(x) has Lipschitz constant
+#   at most sqrt(2) * L (by Cauchy-Schwarz on the difference vector).
+#   This gives CERTIFICATE_DENOMINATOR = sqrt(2) ≈ 1.4142.
+#   The alternative triangle inequality bound gives 2*L (conservative).
+#   We use the TIGHT bound throughout. This is consistent everywhere.
+# ============================================================================
+model:
+  name: "RIGELNet"
+
+  # --------------------------------------------------------------------------
+  # 4.1 Mathematical Constants (SINGLE definitions, used everywhere)
+  # --------------------------------------------------------------------------
+  constants:
+    # Certificate denominator: sqrt(2) from Cauchy-Schwarz tight bound
+    # DERIVATION: ||g(x) - g(x')||_2 <= sqrt(2) * L * ||x - x'||_2
+    # where g is the margin function. See uncertainty.py Section 1.
+    certificate_denominator: 1.4142135623730951  # = sqrt(2)
+
+    # Orthogonality verification tolerance
+    orthogonality_tolerance: 1.0e-5
+
+    # Lipschitz verification tolerance
+    lipschitz_tolerance: 1.0e-5
+
+    # Bound verification tolerance (for Weyl bounds etc.)
+    bound_tolerance: 1.0e-6
+
+  # --------------------------------------------------------------------------
+  # 4.2 Input/Output Dimensions
+  # --------------------------------------------------------------------------
+  dimensions:
+    # Bitcoin datasets have 8 features, Ethereum have 2
+    # The model handles both via the encoder layer
+    input_dim_bitcoin: 8
+    input_dim_ethereum: 2
+    hidden_dim: 256
+    output_dim: 2  # Binary classification: licit vs illicit
+
+  # --------------------------------------------------------------------------
+  # 4.3 Lipschitz-Constrained Architecture
+  # --------------------------------------------------------------------------
+  lipschitz:
+    # Self-loop weight alpha
+    # L_layer = alpha + 1 = 2.0
+    self_loop_weight: 1.0
+
+    # Number of GNN layers K
+    # L_total = (alpha+1)^K = 2^3 = 8.0
+    num_layers: 3
+
+    # Per-layer Lipschitz constant (COMPUTED, not set)
+    # L_layer = self_loop_weight + 1 = 2.0
+    per_layer_lipschitz: 2.0
+
+    # Total Lipschitz constant (COMPUTED, not set)
+    # L_total = per_layer_lipschitz ^ num_layers = 2^3 = 8.0
+    # CRITICAL: This MUST equal (self_loop_weight + 1)^num_layers
+    total_lipschitz: 8.0
+
+    # Linear layer parameterization
+    linear:
+      parameterization: "cayley"  # Exact orthogonality: ||W||_2 = 1
+      # Alternatives for ablation: "householder", "spectral_norm"
+
+    # Activation function
+    activation:
+      type: "groupsort"  # Exact 1-Lipschitz
+      group_size: 2
+      # Alternatives for ablation: "relu" (L=1 but kills gradients),
+      # "gelu" (L≈1.13, not exact)
+
+    # Message passing normalization
+    message_passing:
+      normalization: "symmetric"  # D^{-1/2} A D^{-1/2}
+      add_self_loops: true
+
+    # Residual connections
+    residual:
+      enabled: true
+      alpha: 0.5  # h' = h + 0.5 * layer(h)
+
+    # Lipschitz tracking
+    tracking:
+      enabled: true
+      use_registry: true  # LipschitzRegistry as single source of truth
+      compute_frequency: 100  # Verify every N batches
+      empirical_verification: true
+      verification_samples: 1000
+
+  # --------------------------------------------------------------------------
+  # 4.4 GNN Architecture
+  # --------------------------------------------------------------------------
+  gnn:
+    num_layers: 3
+    layer_type: "lipschitz_gcn"
+    aggregation: "mean"
+    dropout: 0.0  # Disabled during evaluation/uncertainty computation
+    skip_connections: true
+    skip_type: "residual"
+
+  # --------------------------------------------------------------------------
+  # 4.5 Classification Head
+  # --------------------------------------------------------------------------
+  classifier:
+    num_layers: 2
+    hidden_dim: 128
+    output_activation: "none"  # Raw logits; softmax in loss
+    margin_scaling: true
+    margin_temperature: 1.0
+
+
+# ============================================================================
+# SECTION 5: UNCERTAINTY PARAMETERS — THE NOVEL CONTRIBUTION
+# ============================================================================
+# This section configures the uncertainty decomposition framework that is
+# the central contribution of the RIGEL paper. Every parameter here directly
+# corresponds to a theorem or algorithm in uncertainty.py.
+# ============================================================================
+uncertainty:
+
+  # --------------------------------------------------------------------------
+  # 5.1 Structural Uncertainty (Theorem B)
+  # --------------------------------------------------------------------------
+  # Models how missing edges degrade prediction reliability.
+  # This is a DATA QUALITY problem: real-world graphs are inherently
+  # incomplete due to privacy, cross-chain activity, off-chain transactions.
+  #
+  # MATHEMATICAL TOOL: Weyl's inequality on normalized adjacency perturbation
+  # PERTURBATION PATH: missing edges → ΔA → ΔD → ΔÂ → Δh → ΔU_structural
+  # NOTE: Does NOT use feature-Lipschitz L to bound structural changes.
+  # --------------------------------------------------------------------------
+  structural:
+    enabled: true
+
+    # Missing edge fractions to evaluate
+    missing_fractions: [0.0, 0.05, 0.10, 0.20, 0.30, 0.50]
+
+    # Missing edge patterns (how edges disappear in practice)
+    missing_patterns:
+      - name: "random"
+        description: "Uniformly random edge removal (baseline)"
+      - name: "degree_biased"
+        description: "Low-degree nodes lose edges preferentially (realistic: peripheral addresses have fewer observed transactions)"
+      - name: "community_biased"
+        description: "Entire communities lose internal edges (realistic: privacy coins, mixing services)"
+
+    # Weyl bound computation
+    weyl:
+      method: "per_edge"  # Compute per-edge Weyl bound, then sum
+      adaptive_per_node: true  # Different bounds for different nodes
+      # Per-edge bound formula:
+      # ||Delta_e A_hat||_2 <= 1/sqrt(d_u * d_v) + (1/2)(1/d_u + 1/d_v)
+      # For k missing edges: ||Delta_A_hat||_2 <= sum of per-edge bounds
+
+    # Validation
+    validation:
+      enabled: true
+      max_nodes_for_exact_svd: 2000  # Subgraph size for exact validation
+      num_validation_trials: 5
+      # Weyl bound MUST be >= exact SVD value. If not, implementation is wrong.
+
+  # --------------------------------------------------------------------------
+  # 5.2 Temporal Uncertainty (Theorem C)
+  # --------------------------------------------------------------------------
+  # Models how prediction reliability degrades as data ages between updates.
+  # This is a DATA FRESHNESS problem: the graph we computed on may have
+  # changed since the last update.
+  #
+  # MATHEMATICAL MODEL: Staleness amplification with local event rate
+  # Gamma(delta_t, lambda_v) = 1 - exp(-lambda_v * delta_t)
+  # where lambda_v = edges per second arriving near node v
+  #
+  # NOTE: This is about NATURAL DATA AGING, not adversarial manipulation.
+  # The derivation is INDEPENDENT of the structural uncertainty derivation.
+  # --------------------------------------------------------------------------
+  temporal:
+    enabled: true
+
+    # Staleness thresholds to evaluate (seconds)
+    staleness_thresholds: [10.0, 30.0, 60.0, 120.0, 300.0]
+
+    # Maximum allowed staleness before automatic invalidation
+    max_staleness_seconds: 60.0
+
+    # Dequeue threshold: nodes with staleness above this are prioritized
+    dequeue_threshold_seconds: 30.0
+
+    # Staleness model
+    amplification_model: "exponential"  # Gamma = 1 - exp(-lambda * delta_t)
+    # Alternative: "linear" for Gamma = min(1, lambda * delta_t)
+
+    # Event rate estimation
+    event_rate_window_seconds: 3600  # 1 hour window for local rate estimation
+
+    # Behavior for expired reliability scores
+    return_stale_on_miss: false  # NEVER return stale values; return None
+
+  # --------------------------------------------------------------------------
+  # 5.3 Feature Uncertainty
+  # --------------------------------------------------------------------------
+  # Models how feature noise (measurement imprecision) affects predictions.
+  # Transaction amounts, gas prices, and derived features all contain noise.
+  #
+  # MATHEMATICAL MODEL: L * sigma * ||noise_sensitivity||
+  # where L is the total Lipschitz constant (used correctly here because
+  # feature noise IS a feature-space perturbation on the SAME graph).
+  # --------------------------------------------------------------------------
+  feature:
+    enabled: true
+
+    # Noise levels to evaluate
+    noise_sigmas: [0.01, 0.05, 0.10, 0.20]
+
+    # Noise model
+    noise_model: "gaussian"  # Additive N(0, sigma^2 * I)
+
+  # --------------------------------------------------------------------------
+  # 5.4 Uncertainty Interaction (Theorem D)
+  # --------------------------------------------------------------------------
+  # Models the non-additive coupling between uncertainty sources.
+  # When edges are missing, you also lose temporal information about those
+  # edges, so structural and temporal uncertainty are correlated.
+  #
+  # MATHEMATICAL BOUND:
+  # U_interaction <= corr(missing, staleness) * sqrt(U_struct * U_temp)
+  # U_interaction >= 0, with equality iff sources are independent.
+  # --------------------------------------------------------------------------
+  interaction:
+    enabled: true
+    estimation_method: "empirical"  # Estimate correlation from data
+    estimation_samples: 10000
+
+  # --------------------------------------------------------------------------
+  # 5.5 Reliability Score (Theorem E)
+  # --------------------------------------------------------------------------
+  # The actionable output of the RIGEL framework.
+  # R(v) = margin(v) / (margin(v) + sqrt(2) * U_total(v))
+  #
+  # Properties:
+  #   R(v) ∈ [0, 1]
+  #   R(v) → 1 as margin → ∞ or U_total → 0 (perfectly reliable)
+  #   R(v) → 0 as margin → 0 or U_total → ∞ (completely unreliable)
+  #   Monotonically increasing in margin
+  #   Monotonically decreasing in total uncertainty
+  # --------------------------------------------------------------------------
+  reliability:
+    # Formula uses certificate_denominator = sqrt(2) from model.constants
+    formula: "margin / (margin + sqrt(2) * U_total)"
+
+    # Routing thresholds for decision system
+    routing:
+      high_threshold: 0.8   # R >= 0.8: Auto-process (reliable)
+      low_threshold: 0.3    # R < 0.3: Defer (insufficient reliability)
+      # 0.3 <= R < 0.8: Flag for human review
+
+  # --------------------------------------------------------------------------
+  # 5.6 Calibration Analysis
+  # --------------------------------------------------------------------------
+  calibration:
+    num_bins: 15  # For Expected Calibration Error (ECE) computation
+    # ECE = sum_{b=1}^{B} (n_b/N) * |accuracy_b - confidence_b|
+
+
+# ============================================================================
+# SECTION 6: TRAINING PARAMETERS
+# ============================================================================
+training:
+
+  # --------------------------------------------------------------------------
+  # 6.1 Basic Settings
+  # --------------------------------------------------------------------------
+  epochs: 200
+  patience: 30  # Early stopping patience (epochs without improvement)
+  batch_size: 512  # Per GPU
+  gradient_accumulation_steps: 4
+  # Effective batch size: 512 * 4 GPUs * 4 accumulation = 8192
+
+  # --------------------------------------------------------------------------
+  # 6.2 Optimizer
+  # --------------------------------------------------------------------------
+  optimizer:
+    type: "adamw"
+    lr: 1.0e-3
+    betas: [0.9, 0.999]
+    eps: 1.0e-8
+    weight_decay: 1.0e-4
+    gradient_clip_norm: 1.0
+
+  # --------------------------------------------------------------------------
+  # 6.3 Learning Rate Schedule
+  # --------------------------------------------------------------------------
+  scheduler:
+    type: "cosine_warmup"
+    warmup_epochs: 10
+    warmup_start_lr: 1.0e-6
+    min_lr: 1.0e-6
+
+  # --------------------------------------------------------------------------
+  # 6.4 Loss Function
+  # --------------------------------------------------------------------------
+  loss:
+    # Primary classification loss
+    classification:
+      type: "cross_entropy"
+      label_smoothing: 0.1
+
+    # Class imbalance handling
+    class_weights:
+      enabled: true
+      auto_compute: true  # Computed from dataset statistics
+      # Fallback weights if auto-compute fails:
+      manual_weights_btc_m: [1.0, 4.54]  # [licit, illicit] matching ratio
+      manual_weights_btc_l: [1.0, 3.51]
+      manual_weights_eth_s: [1.0, 1.02]
+      manual_weights_eth_p: [1.0, 2.93]
+
+    # Focal loss for hard example mining (helps with imbalance)
+    focal:
+      enabled: true
+      gamma: 2.0
+      alpha: 0.25
+
+    # Margin maximization: encourage large margins for better reliability
+    # Larger margins → larger R(v) → more predictions are reliable
+    margin:
+      enabled: true
+      weight: 0.1
+      target_margin: 2.0
+
+    # Lipschitz regularization: keep L close to theoretical (alpha+1)^K
+    lipschitz_reg:
+      enabled: true
+      weight: 0.01
+      target: 8.0  # (1+1)^3 = 8.0
+
+  # --------------------------------------------------------------------------
+  # 6.5 Mixed Precision
+  # --------------------------------------------------------------------------
+  mixed_precision:
+    enabled: true
+    dtype: "float16"
+    loss_scale: "dynamic"
+    initial_scale: 65536.0
+    growth_interval: 2000
+
+  # --------------------------------------------------------------------------
+  # 6.6 Regularization
+  # --------------------------------------------------------------------------
+  regularization:
+    dropout: 0.1        # Training only; disabled during uncertainty computation
+    drop_edge: 0.1      # Random edge dropping during training
+    feature_noise: 0.01 # Small noise for robustness
+
+  # --------------------------------------------------------------------------
+  # 6.7 Validation Settings
+  # --------------------------------------------------------------------------
+  validation:
+    val_frequency: 1  # Every epoch
+
+    metrics:
+      # Classification metrics
+      - "loss"
+      - "accuracy"
+      - "f1_macro"
+      - "f1_illicit"
+      - "auc_roc"
+      - "auc_pr"
+      # Reliability metrics (OUR contribution)
+      - "mean_reliability"
+      - "reliability_coverage_at_0.5"
+      - "reliability_coverage_at_0.8"
+      - "expected_calibration_error"
+
+    # Early stopping on F1 for illicit class (primary task metric)
+    monitor_metric: "f1_illicit"
+    monitor_mode: "max"
+
+
+# ============================================================================
+# SECTION 7: STREAMING PARAMETERS
+# ============================================================================
+streaming:
+  enabled: true
+  mode: "temporal"  # Process edges in timestamp order
+
+  stream_batch_size: 1000
+
+  # Sliding window
+  window:
+    time_window_hours: 24
+    edge_window_size: 100000
+    window_type: "time"
+    slide_interval_minutes: 60
+
+  # Incremental updates
+  incremental:
+    max_hops: 3  # Same as num_layers
+    cache_size: 100000
+    feature_update: "lazy"
+    lazy_batch_size: 100
+
+  # Staleness policy — COMPLETE specification
+  # (Addresses R2-C4: "Algorithm 1 lacks expiration/eviction/dequeue")
+  #
+  # ALGORITHM: RIGEL Streaming Reliability Maintenance
+  #
+  # ON EDGE ARRIVAL e = (u, v, t):
+  #   1. G ← G ∪ {e}
+  #   2. UpdateDegrees(u, v)                            [O(1)]
+  #   3. affected ← KHop(u, K) ∪ KHop(v, K)            [O(d_avg^K)]
+  #   4. FOR each w in affected:
+  #      a. INVALIDATE reliability[w]                    [O(1)]
+  #      b. IF w in active_window: recompute reliability [O(K·d²)]
+  #      c. ELSE: LazyQueue.insert(w, staleness_priority)[O(log n)]
+  #   5. WINDOW EXPIRATION:
+  #      Remove edges with timestamp < t - window_size
+  #      INVALIDATE reliability for all nodes in expired edges' K-hop
+  #   6. DEQUEUE TRIGGER:
+  #      Pop nodes from LazyQueue whose staleness > dequeue_threshold
+  #      Recompute their reliability scores
+  #   7. INVARIANT: reliability[v] is VALID iff
+  #      (a) No edge in v's K-hop changed since computation AND
+  #      (b) Time since computation ≤ max_staleness_seconds
+  #      If INVALID: return None (NEVER a stale value)
+  #
+  # SPACE: O(n·d + W·log n)
+  # TIME PER EDGE: O(K·d²·d_avg^K)
+  staleness:
+    enabled: true
+    max_staleness_seconds: 60.0
+    dequeue_threshold_seconds: 30.0
+    return_stale_on_miss: false  # Return None, NEVER stale values
+    max_recomputation_batch: 100
+
+  # Checkpointing for fault tolerance
+  checkpointing:
+    enabled: true
+    interval_edges: 1000000
+    keep_last_n: 3
+
+
+# ============================================================================
+# SECTION 8: EXPERIMENT DEFINITIONS
+# ============================================================================
+# Each experiment has:
+#   - Precise metric definition (what is measured, how, units)
+#   - Datasets used
+#   - Number of seeds for statistical significance
+#   - Expected output (figures and tables)
+# ============================================================================
+experiments:
+  # Common settings
+  num_seeds: 5
+  seeds: [42, 43, 44, 45, 46]
+  confidence_level: 0.95
+  statistical_test: "paired_t_test"
+
+  # --------------------------------------------------------------------------
+  # Experiment 1: Uncertainty Decomposition Validation
+  # --------------------------------------------------------------------------
+  exp1_decomposition:
+    name: "Uncertainty Decomposition Validation"
+    description: >
+      Validates Theorem A by varying ONE uncertainty source at a time
+      while holding others constant. Measures R² correlation between
+      predicted per-source uncertainty and observed prediction error.
+    datasets: ["ethereum_s", "ethereum_p", "bitcoin_m", "bitcoin_l"]
+    metric_definition: >
+      R² correlation: Pearson correlation squared between the predicted
+      uncertainty component U_source(v) and the actual absolute
+      prediction error |f(x,G_perturbed) - f(x,G_original)| measured
+      on the perturbed graph. Higher R² means better decomposition.
+    outputs:
+      - "fig2_stacked_uncertainty_bars.pdf"
+      - "tab3_decomposition_r2.tex"
+
+  # --------------------------------------------------------------------------
+  # Experiment 2: Per-Node Reliability Heterogeneity
+  # --------------------------------------------------------------------------
+  exp2_heterogeneity:
+    name: "Per-Node Reliability Heterogeneity"
+    description: >
+      Computes R(v) for all nodes and analyzes how reliability varies
+      with local graph topology (degree, clustering, density).
+    datasets: ["ethereum_s", "ethereum_p", "bitcoin_m"]
+    metric_definition: >
+      Spearman rank correlation between node degree and R(v).
+      Reliability distribution: mean, std, percentiles [25, 50, 75, 90].
+    outputs:
+      - "fig3_reliability_vs_degree.pdf"
+      - "fig4_reliability_distribution.pdf"
+
+  # --------------------------------------------------------------------------
+  # Experiment 3: Reliability-Accuracy Tradeoff Frontier
+  # --------------------------------------------------------------------------
+  exp3_tradeoff:
+    name: "Reliability-Accuracy Tradeoff Frontier"
+    description: >
+      Selective prediction: only predict for nodes with R(v) >= R_min.
+      Sweep R_min in [0.0, 0.1, ..., 1.0] and measure coverage vs accuracy.
+    datasets: ["ethereum_s", "ethereum_p", "bitcoin_m", "bitcoin_l"]
+    metric_definition: >
+      For each R_min threshold: coverage = fraction of nodes predicted,
+      precision_illicit, recall_illicit, F1_illicit on predicted nodes.
+    outputs:
+      - "fig5_pareto_frontier.pdf"
+      - "tab4_optimal_operating_points.tex"
+
+  # --------------------------------------------------------------------------
+  # Experiment 4: Streaming Reliability Dynamics
+  # --------------------------------------------------------------------------
+  exp4_streaming:
+    name: "Streaming Reliability Dynamics"
+    description: >
+      Process BTC-L as a true edge stream and track reliability evolution
+      over time. Measure correlation between reliability drops and errors.
+    datasets: ["bitcoin_l"]
+    max_edges_to_process: 10000000  # 10M edges for tractability
+    metric_definition: >
+      Mean reliability over time, staleness percentiles (p50, p90, p95, p99),
+      correlation between R(v) drops and actual prediction errors.
+    outputs:
+      - "fig6_reliability_timeline.pdf"
+      - "tab5_staleness_percentiles.tex"
+
+  # --------------------------------------------------------------------------
+  # Experiment 5: Incompleteness Regimes
+  # --------------------------------------------------------------------------
+  exp5_incompleteness:
+    name: "Incompleteness Regimes"
+    description: >
+      Simulate different incompleteness patterns (random, degree-biased,
+      community-biased) and measure impact on reliability scores.
+    datasets: ["ethereum_p", "bitcoin_m", "bitcoin_l"]
+    metric_definition: >
+      Mean R(v), reliability coverage at thresholds, per-node uncertainty
+      under each incompleteness pattern and fraction.
+    outputs:
+      - "tab6_incompleteness_regimes.tex"
+
+  # --------------------------------------------------------------------------
+  # Experiment 6: Reliability-Guided Decision Routing
+  # --------------------------------------------------------------------------
+  exp6_routing:
+    name: "Reliability-Guided Decision Routing"
+    description: >
+      Three-tier decision system: auto-process (R>=0.8), review (0.3<=R<0.8),
+      defer (R<0.3). Compare against baseline approaches.
+    datasets: ["ethereum_s", "ethereum_p", "bitcoin_m", "bitcoin_l"]
+    metric_definition: >
+      Per-tier: precision, recall, F1 for illicit class.
+      Overall: fraction auto-processed, fraction deferred.
+    outputs:
+      - "tab7_routing_results.tex"
+
+  # --------------------------------------------------------------------------
+  # Experiment 7: Comparison with Uncertainty Quantification Methods
+  # --------------------------------------------------------------------------
+  exp7_comparison:
+    name: "Comparison with UQ Methods"
+    description: >
+      Compare RIGEL reliability against established uncertainty methods.
+      Each baseline selected for a specific reason (documented below).
+    datasets: ["ethereum_s", "ethereum_p", "bitcoin_m", "bitcoin_l"]
+    metric_definition: >
+      Expected Calibration Error (ECE), Brier score, AUROC for identifying
+      incorrect predictions, computation time per node.
+    baselines:
+      - name: "BayesianGNN"
+        reference: "Zhang et al., Bayesian GCN, AAAI 2019"
+        justification: "Foundational parametric UQ method for graphs"
+        mc_samples: 50
+      - name: "MCDropout"
+        reference: "Hasanzadeh et al., Graph DropConnect, NeurIPS 2020"
+        justification: "Most accessible approximate Bayesian inference for GNNs"
+        mc_samples: 50
+        dropout_rate: 0.1
+      - name: "ConformalGNN"
+        reference: "Huang et al., CF-GNN, NeurIPS 2023"
+        justification: "State-of-the-art distribution-free UQ with coverage guarantee"
+        confidence_level: 0.9
+      - name: "DeepEnsemble"
+        reference: "Lakshminarayanan et al., NeurIPS 2017 (adapted for GNNs)"
+        justification: "Strongest empirical UQ method across ML domains"
+        num_models: 5
+      - name: "EnergyOOD"
+        reference: "Liu et al., Energy-based OOD detection, NeurIPS 2020"
+        justification: "Score-based OOD detection for comparison with reliability scoring"
+    outputs:
+      - "fig7_calibration_curves.pdf"
+      - "tab8_uq_comparison.tex"
+      - "tab9_computation_time.tex"
+
+  # --------------------------------------------------------------------------
+  # Experiment 8: Scalability Analysis
+  # --------------------------------------------------------------------------
+  exp8_scalability:
+    name: "Scalability Analysis"
+    description: >
+      Measure computational overhead of reliability computation on BTC-L
+      (20M nodes, 203M edges) to demonstrate practical deployability.
+    datasets: ["bitcoin_l"]
+    metric_definition: >
+      Per-node reliability computation time (ms), memory overhead (MB),
+      streaming throughput (edges/second), overhead relative to plain GNN.
+    scaling_points:
+      - num_edges: 1000000     # 1M
+      - num_edges: 10000000    # 10M
+      - num_edges: 50000000    # 50M
+      - num_edges: 100000000   # 100M
+      - num_edges: 203419765   # Full BTC-L
+    outputs:
+      - "tab10_scalability.tex"
+      - "fig8_scaling_curve.pdf"
+
+
+# ============================================================================
+# SECTION 9: PAPER ARTIFACT GENERATION
+# ============================================================================
+paper_artifacts:
+  output_dir: "./paper_artifacts"
+
+  figures:
+    format: "pdf"
+    dpi: 300           # Publication quality
+    min_font_size: 10  # Points — readable when printed
+    colorblind_safe: true
+    # Palette: blue=#2196F3, orange=#FF9800, green=#4CAF50,
+    #          red=#F44336, purple=#9C27B0 (distinguishable by all)
+
+  tables:
+    format: "latex"
+    include_std: true       # Report mean ± std across seeds
+    include_p_values: true  # Statistical significance
+
+  # All figures to generate
+  figure_list:
+    - "fig1_rigel_architecture.pdf"        # System overview
+    - "fig2_stacked_uncertainty_bars.pdf"   # Exp 1
+    - "fig3_reliability_vs_degree.pdf"      # Exp 2
+    - "fig4_reliability_distribution.pdf"   # Exp 2
+    - "fig5_pareto_frontier.pdf"            # Exp 3
+    - "fig6_reliability_timeline.pdf"       # Exp 4
+    - "fig7_calibration_curves.pdf"         # Exp 7
+    - "fig8_scaling_curve.pdf"              # Exp 8
+
+  # All tables to generate
+  table_list:
+    - "tab1_dataset_statistics.tex"         # Full metadata
+    - "tab2_main_results.tex"               # Classification + reliability
+    - "tab3_decomposition_r2.tex"           # Exp 1
+    - "tab4_optimal_operating_points.tex"   # Exp 3
+    - "tab5_staleness_percentiles.tex"      # Exp 4
+    - "tab6_incompleteness_regimes.tex"     # Exp 5
+    - "tab7_routing_results.tex"            # Exp 6
+    - "tab8_uq_comparison.tex"              # Exp 7
+    - "tab9_computation_time.tex"           # Exp 7
+    - "tab10_scalability.tex"               # Exp 8
+
+
+# ============================================================================
+# SECTION 10: REPRODUCIBILITY
+# ============================================================================
+reproducibility:
+  seed: 42
+  deterministic: true
+
+  cudnn:
+    benchmark: false     # Disable for reproducibility
+    deterministic: true  # Ensure deterministic operations
+
+  seeds:
+    numpy: 42
+    torch: 42
+    python: 42
+
+  # Environment requirements
+  requirements:
+    python: ">=3.9"
+    torch: ">=2.1.0"
+    torch_geometric: ">=2.4.0"
+    numpy: ">=1.24.0"
+    scipy: ">=1.11.0"
+    scikit_learn: ">=1.3.0"
+    pyyaml: ">=6.0"
+    matplotlib: ">=3.7.0"
+    tqdm: ">=4.65.0"
+
+  # Checkpoint and logging
+  track_code_version: true
+  save_config_copy: true
+
+
+# ============================================================================
+# SECTION 11: LOGGING
+# ============================================================================
+logging:
+  level: "INFO"
+
+  console:
+    enabled: true
+    format: "%(asctime)s | %(levelname)-8s | %(message)s"
+
+  file:
+    enabled: true
+    path: "${hardware.storage.logs_dir}/rigel_training.log"
+    max_size_mb: 100
+    backup_count: 5
+
+  tensorboard:
+    enabled: true
+    log_dir: "${hardware.storage.logs_dir}/tensorboard"
+    flush_secs: 30
+
+  # Logging frequencies (batches)
+  log_frequency:
+    train_loss: 10
+    train_metrics: 100
+    val_metrics: 1        # Every epoch
+    reliability: 100
+    uncertainty: 100
+
+
+# ============================================================================
+# END OF CONFIGURATION
+# ============================================================================
+# This file is the SINGLE SOURCE OF TRUTH for the entire RIGEL project.
+# All code files import constants and parameters from here.
+# No magic numbers exist anywhere in the codebase.
+#
+# If you need to change a parameter, change it HERE and only here.
+# ============================================================================
