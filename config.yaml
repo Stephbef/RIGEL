@@ -1,12 +1,12 @@
 # ============================================================================
 # RIGEL: Reliability-Informed Graph Engine for Trustworthy Learning
 # ============================================================================
-# Configuration File for IEEE TKDE Submission
+# Configuration File for  IEEE ICDM Conference Submission
 #
 # Paper: "RIGEL: Decomposing Prediction Uncertainty for Trustworthy
 #         Graph Learning on Streaming Graphs"
-# Target: IEEE Transactions on Knowledge and Data Engineering (TKDE)
-# Type: Regular Paper (14 double-column pages)
+# Target: IEEE ICDM Conference
+# Type: Regular Paper (10 double-column pages)
 #
 # IMPORTANT — VENUE SCOPE ALIGNMENT:
 #   This is a KNOWLEDGE AND DATA ENGINEERING contribution about quantifying
@@ -14,7 +14,7 @@
 #   It is NOT a security paper, NOT an adversarial robustness paper, and
 #   NOT primarily about computational efficiency.
 #
-#   TKDE scope items addressed:
+#    IEEE ICDM Conference scope items addressed:
 #     (e) Real-time knowledge bases and databases — streaming reliability
 #     (g) Data management methodologies — uncertainty-aware prediction
 #     (j) Integrity, security, and fault tolerance — prediction reliability
