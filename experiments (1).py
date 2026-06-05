@@ -2,7 +2,7 @@
 RIGEL: Complete Experiment Suite and Paper Artifact Generation
 ===============================================================
 
-This module implements all 8 experiments for the RIGEL TKDE paper plus
+This module implements all 8 experiments for the RIGEL paper plus
 the complete paper artifact generation pipeline (figures + tables).
 
 EXPERIMENT INDEX:
